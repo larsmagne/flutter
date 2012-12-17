@@ -28,47 +28,71 @@ sub get_url {
     return $url;
 }
 
+sub play_file {
+    my $file = shift;
+    system("pkill mplayer");
+    exec("mplayer",
+	 "-volume", "0",
+	 "-softvol",
+	 "-zoom", "-fs",
+	 "-display", ":1",
+	 "-loop", "0",
+	 $file);
+}
+
 sub refresh {
     open(UF, $update_file);
     $current = <UF>;
     close UF;
 
-    @current = split("/", $current);
+    chop($current);
+    my @current = split("/", $current);
 
-    $track = $current[$#current - 2];
-    $track =~ s/^[0-9][0-9]-|.mp3$//g;
+    my $track = $current[$#current - 2];
+    my $track =~ s/^[0-9][0-9]-|.mp3$//g;
     
-    $artist = uri_escape($current[$#current - 2]);
-    $album = uri_escape($current[$#current - 1]);
-    $track = uri_escape($track);
+    my $artist = uri_escape($current[$#current - 2]);
+    my $album = uri_escape($current[$#current - 1]);
+    my $track = uri_escape($track);
     
-    $url = get_url("$artist+$album+$track");
+    my $url = get_url("$artist+$album+$track");
     
     if (! $url) {
 	$url = get_url("$artist+$track");
     }
     
     if ($url) {
-	$hash = Digest::SHA1::sha1_base64($url);
+	#$hash = Digest::SHA1::sha1_base64($url);
+	my $hash = $current[$#current - 2] . "_" .
+	    $current[$#current - 1] . "_" .
+	    $current[$#current] . ".flv";
 	
 	if (! -f "$cache/$hash") {
-	    print "Downloading $url $hash\n";
-	    system("youtube-dl",
-		   "-o", "$cache/$hash",
-		   $url);
+	    if (fork()) {
+		return;
+	    } else {
+		print "Downloading $url $hash\n";
+		system("youtube-dl",
+		       "-o", "$cache/$hash",
+		       $url);
+		sleep(5);
+		$mplayer_pid = $$;
+		if (-f "$cache/$hash") {
+		    play_file("$cache/$hash");
+		} elsif (-f "$cache/$hash.part") {
+		    play_file("$cache/$hash.part");
+		}
+		exit(0);
+	    }
 	}
 	
 	if (-f "$cache/$hash") {
 	    if ($mplayer_pid) {
-		kill -9, $mplayer_pid;
+		kill 9, $mplayer_pid;
 	    }
 	    $mplayer_pid = fork();
 	    if (! $mplayer_pid) {
-		exec("mplayer",
-		     "-volume", "0",
-		     "-softvol",
-		     "-loop", "0",
-		     "$cache/$hash");
+		play_file("$cache/$hash");
 		exit(0);
 	    }
 	}
