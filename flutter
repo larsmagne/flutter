@@ -64,7 +64,8 @@ sub refresh {
     if ($url) {
 	my $hash = Digest::SHA1::sha1_base64($url);
 	$hash =~ s#/#-#g;
-	if (! -f "$cache/$hash") {
+	if (! -f "$cache/$hash" &&
+	    ! -f "$cache/$hash.part") {
 	    if (fork()) {
 		return;
 	    } else {
