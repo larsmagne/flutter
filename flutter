@@ -1,0 +1,55 @@
+#!/usr/bin/perl
+
+$cache = $ARGV[0];
+$artist = $ARGV[1];
+$album = $ARGV[2];
+$track = $ARGV[3];
+
+use XML::LibXML;
+use Digest::SHA1;
+use URI::Escape;
+
+sub get_url {
+    my $search = shift;
+    print "Searching for $search\n";
+    system("curl",
+	   "-s",
+	   "-o", "/tmp/flutter.url",
+	   "https://gdata.youtube.com/feeds/api/videos?q=$search&max-results=1&v=2");
+    
+    $parser = XML::LibXML->new();
+    $xmldoc = $parser->parse_file("/tmp/flutter.url");
+    
+    for $content ($xmldoc->getElementsByTagName('content')) {
+	$url = $content->getAttribute("src");
+    }
+    
+    if (! $url) {
+	print "Can't find URL\n";
+    }
+    return $url;
+}
+
+$artist = uri_escape($artist);
+$album = uri_escape($album);
+$track = uri_escape($track);
+
+$url = get_url("$artist+$album+$track");
+
+if (! $url) {
+    $url = get_url("$artist+$track");
+}
+
+if ($url) {
+    $hash = Digest::SHA1::sha1_base64($url);
+    
+    if (! -f "$cache/$hash") {
+	print "Downloading $url $hash\n";
+	system("youtube-dl",
+	       "-o", "$cache/$hash",
+	       $url);
+    }
+    
+    if (-f "$cache/$hash") {
+    }
+}
