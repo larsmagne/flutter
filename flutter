@@ -42,7 +42,6 @@ sub kill_mplayer {
 	system("kill", "-9", "$pid");
     }
     system("pkill mplayer");
-    system("pkill -f youtube-dl");
 }
 
 sub duration {
