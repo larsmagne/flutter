@@ -48,13 +48,13 @@ sub refresh {
     chop($current);
     my @current = split("/", $current);
 
-    my $track = $current[$#current - 2];
-    my $track =~ s/^[0-9][0-9]-|.mp3$//g;
-    
+    my $track = $current[$#current];
+    $track =~ s/^[0-9][0-9]-|.mp3$//g;
+
     my $artist = uri_escape($current[$#current - 2]);
     my $album = uri_escape($current[$#current - 1]);
-    my $track = uri_escape($track);
-    
+    $track = uri_escape($track);
+
     my $url = get_url("$artist+$album+$track");
     
     if (! $url) {
@@ -72,9 +72,12 @@ sub refresh {
 		return;
 	    } else {
 		print "Downloading $url $hash\n";
-		system("youtube-dl",
-		       "-o", "$cache/$hash",
-		       $url);
+		if (! fork()) {
+		    system("youtube-dl",
+			   "-o", "$cache/$hash",
+			   $url);
+		    exit(0);
+		}
 		sleep(5);
 		$mplayer_pid = $$;
 		if (-f "$cache/$hash") {
@@ -101,11 +104,11 @@ sub refresh {
 
 while (true) {
     $timestamp = (stat($update_file))[9];
-    print "Sleeping...\n";
     if ($timestamp > $last_timestamp) {
 	refresh();
     }
     $last_timestamp = $timestamp;
+    print "Sleeping...\n";
     sleep(1);
 }
 
