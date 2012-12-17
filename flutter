@@ -30,14 +30,30 @@ sub get_url {
 
 sub play_file {
     my $file = shift;
+    if ($mplayer_pid) {
+	print "Killing player $mplayer_pid\n";
+	kill 9, $mplayer_pid;
+	system("kill", "-9", "$mplayer_pid");
+    }
     system("pkill mplayer");
-    exec("mplayer",
-	 "-volume", "0",
-	 "-softvol",
-	 "-zoom", "-fs",
-	 "-display", ":1",
-	 "-loop", "0",
-	 $file);
+    $mplayer_pid = $$;
+    print "Player pid $mplayer_pid\n";
+    while (true) {
+	my $ffile;
+	if (-f "$file.part") {
+	    $ffile = "$file.part";
+	} else {
+	    $ffile = $file;
+	}
+	system("mplayer",
+	       "-volume", "0",
+	       "-softvol",
+	       "-msglevel", "all=-1",
+	       "-zoom", "-fs",
+	       "-display", ":1",
+	       $ffile);
+    }
+    exit(0);
 }
 
 sub refresh {
@@ -82,24 +98,11 @@ sub refresh {
 		    exit(0);
 		}
 		sleep(5);
-		$mplayer_pid = $$;
-		if (-f "$cache/$hash") {
-		    play_file("$cache/$hash");
-		} elsif (-f "$cache/$hash.part") {
-		    play_file("$cache/$hash.part");
-		}
-		exit(0);
-	    }
-	}
-	
-	if (-f "$cache/$hash") {
-	    if ($mplayer_pid) {
-		kill 9, $mplayer_pid;
-	    }
-	    $mplayer_pid = fork();
-	    if (! $mplayer_pid) {
 		play_file("$cache/$hash");
-		exit(0);
+	    }
+	} else {
+	    if (! fork()) {
+		play_file("$cache/$hash");
 	    }
 	}
     }
@@ -111,6 +114,6 @@ while (true) {
 	refresh();
     }
     $last_timestamp = $timestamp;
-    print "Sleeping...\n";
+    #print "Sleeping...\n";
     sleep(1);
 }
