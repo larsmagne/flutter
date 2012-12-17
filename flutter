@@ -112,11 +112,12 @@ sub refresh {
 		play_file("$cache/$hash");
 	    }
 	} else {
+	    my $old_pid = $mplayer_pid;
 	    $mplayer_pid = fork();
 	    if (! $mplayer_pid) {
 		play_file("$cache/$hash");
 	    } else {
-		kill_mplayer($mplayer_pid);
+		kill_mplayer($old_pid);
 	    }
 	}
     }
