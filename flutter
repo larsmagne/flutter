@@ -7,6 +7,11 @@ use XML::LibXML;
 use Digest::SHA1;
 use URI::Escape;
 
+sub video_duration {
+    my $entry = shift;
+    return ($entry->getElementsByTagName('yt:duration'))[0]->getAttribute("seconds");
+}
+
 # Given a search term, return the URL.
 sub get_url {
     my $search = shift;
@@ -28,11 +33,12 @@ sub get_url {
 
     # Sort the results so that we choose the video that has the length
     # that's closest to our target song.
-    @entries = sort { abs($length - ($a->getElementsByTagName('yt:duration'))[0]->getAttribute("seconds")) cmp
-			  abs($length - ($b->getElementsByTagName('yt:duration'))[0]->getAttribute("seconds")) }
-    @entries;
+    @entries = sort { abs($length - video_duration($a)) cmp
+			  abs($length - video_duration($b)) } @entries;
 
-    return (@entries[0]->getElementsByTagName('content'))[0]->getAttribute("src");
+    $best_entry = $entries[0];
+    print "Best length is " . video_duration($best_entry) . "\n";
+    return ($best_entry->getElementsByTagName('content'))[0]->getAttribute("src");
 }
 
 sub kill_mplayer {
