@@ -14,7 +14,7 @@ sub get_url {
     print "Searching for $search ($length)\n";
     my $duration = "medium";
     if ($length > 20*60 || $length < 4*60) {
-	my $duration = "short";
+	$duration = "short";
     }
     system("curl",
 	   "-s",
