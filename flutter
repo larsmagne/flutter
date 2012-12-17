@@ -33,10 +33,10 @@ sub get_url {
 
     # Sort the results so that we choose the video that has the length
     # that's closest to our target song.
-    @entries = sort { abs($length - video_duration($a)) cmp
+    @entries = sort { abs($length - video_duration($a)) <=>
 			  abs($length - video_duration($b)) } @entries;
 
-    $best_entry = $entries[0];
+    my $best_entry = $entries[0];
     print "Best length is " . video_duration($best_entry) . "\n";
     return ($best_entry->getElementsByTagName('content'))[0]->getAttribute("src");
 }
