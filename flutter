@@ -42,7 +42,7 @@ sub play_file {
 
 sub refresh {
     open(UF, $update_file);
-    $current = <UF>;
+    my $current = <UF>;
     close UF;
 
     chop($current);
@@ -62,11 +62,8 @@ sub refresh {
     }
     
     if ($url) {
-	#$hash = Digest::SHA1::sha1_base64($url);
-	my $hash = $current[$#current - 2] . "_" .
-	    $current[$#current - 1] . "_" .
-	    $current[$#current] . ".flv";
-	
+	my $hash = Digest::SHA1::sha1_base64($url);
+	$hash =~ s#/#-#g;
 	if (! -f "$cache/$hash") {
 	    if (fork()) {
 		return;
@@ -76,6 +73,11 @@ sub refresh {
 		    system("youtube-dl",
 			   "-o", "$cache/$hash",
 			   $url);
+		    chdir($cache);
+		    symlink($hash,
+			    $current[$#current - 2] . "_" .
+			    $current[$#current - 1] . "_" .
+			    $current[$#current] . ".flv");
 		    exit(0);
 		}
 		sleep(5);
@@ -111,4 +113,3 @@ while (true) {
     print "Sleeping...\n";
     sleep(1);
 }
-
