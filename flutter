@@ -1,9 +1,7 @@
 #!/usr/bin/perl
 
 $cache = $ARGV[0];
-$artist = $ARGV[1];
-$album = $ARGV[2];
-$track = $ARGV[3];
+$update_file = $ARGV[1];
 
 use XML::LibXML;
 use Digest::SHA1;
@@ -30,26 +28,60 @@ sub get_url {
     return $url;
 }
 
-$artist = uri_escape($artist);
-$album = uri_escape($album);
-$track = uri_escape($track);
+sub refresh {
+    open(UF, $update_file);
+    $current = <UF>;
+    close UF;
 
-$url = get_url("$artist+$album+$track");
+    @current = split("/", $current);
 
-if (! $url) {
-    $url = get_url("$artist+$track");
-}
-
-if ($url) {
-    $hash = Digest::SHA1::sha1_base64($url);
+    $track = $current[$#current - 2];
+    $track =~ s/^[0-9][0-9]-|.mp3$//g;
     
-    if (! -f "$cache/$hash") {
-	print "Downloading $url $hash\n";
-	system("youtube-dl",
-	       "-o", "$cache/$hash",
-	       $url);
+    $artist = uri_escape($current[$#current - 2]);
+    $album = uri_escape($current[$#current - 1]);
+    $track = uri_escape($track);
+    
+    $url = get_url("$artist+$album+$track");
+    
+    if (! $url) {
+	$url = get_url("$artist+$track");
     }
     
-    if (-f "$cache/$hash") {
+    if ($url) {
+	$hash = Digest::SHA1::sha1_base64($url);
+	
+	if (! -f "$cache/$hash") {
+	    print "Downloading $url $hash\n";
+	    system("youtube-dl",
+		   "-o", "$cache/$hash",
+		   $url);
+	}
+	
+	if (-f "$cache/$hash") {
+	    if ($mplayer_pid) {
+		kill -9, $mplayer_pid;
+	    }
+	    $mplayer_pid = fork();
+	    if (! $mplayer_pid) {
+		exec("mplayer",
+		     "-volume", "0",
+		     "-softvol",
+		     "-loop", "0",
+		     "$cache/$hash");
+		exit(0);
+	    }
+	}
     }
 }
+
+while (true) {
+    $timestamp = (stat($update_file))[9];
+    print "Sleeping...\n";
+    if ($timestamp > $last_timestamp) {
+	refresh();
+    }
+    $last_timestamp = $timestamp;
+    sleep(1);
+}
+
