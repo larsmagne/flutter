@@ -29,7 +29,7 @@ sub get_url {
     # Sort the results so that we choose the video that has the length
     # that's closest to our target song.
     @entries = sort { abs($length - ($a->getElementsByTagName('yt:duration'))[0]->getAttribute("seconds")) cmp
-			  abs($lentgh - ($b->getElementsByTagName('yt:duration'))[0]->getAttribute("seconds")) }
+			  abs($length - ($b->getElementsByTagName('yt:duration'))[0]->getAttribute("seconds")) }
     @entries;
 
     return (@entries[0]->getElementsByTagName('content'))[0]->getAttribute("src");
