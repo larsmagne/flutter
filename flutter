@@ -26,7 +26,8 @@ sub get_url {
     my $xmldoc = $parser->parse_file("/tmp/flutter.url");
 
     my @entries = $xmldoc->getElementsByTagName('entry');
-    if (! $#entries) {
+
+    if ($#entries < 1) {
 	print "Can't find URL\n";
 	return;
     }
