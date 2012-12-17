@@ -10,11 +10,16 @@ use URI::Escape;
 # Given a search term, return the URL.
 sub get_url {
     my $search = shift;
-    print "Searching for $search\n";
+    my $length = shift;
+    print "Searching for $search ($length)\n";
+    my $duration = "medium";
+    if ($length > 20*60 || $length < 4*60) {
+	my $duration = "short";
+    }
     system("curl",
 	   "-s",
 	   "-o", "/tmp/flutter.url",
-	   "https://gdata.youtube.com/feeds/api/videos?q=$search&max-results=1&v=2");
+	   "https://gdata.youtube.com/feeds/api/videos?q=$search&max-results=1&v=2&duration=$duration");
     
     $parser = XML::LibXML->new();
     $xmldoc = $parser->parse_file("/tmp/flutter.url");
@@ -37,6 +42,20 @@ sub kill_mplayer {
 	system("kill", "-9", "$pid");
     }
     system("pkill mplayer");
+    system("pkill -f youtube-dl");
+}
+
+sub duration {
+    my $file = shift;
+    open(my $fd, "-|", "mp3info", "-x", "-F", "-r", "a", $file);
+    my $length;
+    while (<$fd>) {
+	if (/^Length: +([0-9]+):([0-9]+)/) {
+	    $length = $1*60 + $2;
+	}
+    }
+    close $fd;
+    return $length;
 }
 
 sub play_file {
@@ -75,10 +94,11 @@ sub refresh {
     my $album = uri_escape($current[$#current - 1]);
     $track = uri_escape($track);
 
-    my $url = get_url("$artist+$album+$track");
+    my $length = duration($current);
+    my $url = get_url("$artist+$album+$track", $length);
     
     if (! $url) {
-	$url = get_url("$artist+$track");
+	$url = get_url("$artist+$track", $length);
     }
     
     if ($url) {
