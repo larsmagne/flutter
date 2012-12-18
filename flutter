@@ -110,7 +110,7 @@ sub refresh {
     my @current = split("/", $current);
 
     my $track = $current[$#current];
-    $track =~ s/^[0-9][0-9]-|.mp3$//g;
+    $track =~ s/^[0-9][0-9]-|.mp3$|.flac$//g;
 
     my $artist = uri_escape($current[$#current - 2]);
     my $album = uri_escape($current[$#current - 1]);
