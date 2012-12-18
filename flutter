@@ -1,7 +1,6 @@
 #!/usr/bin/perl
 
-$cache = $ARGV[0];
-$update_file = $ARGV[1];
+$update_file = $ARGV[0];
 
 use XML::LibXML;
 use Digest::SHA1;
@@ -12,6 +11,25 @@ sub video_duration {
     return ($entry->getElementsByTagName('yt:duration'))[0]->getAttribute("seconds");
 }
 
+sub video_predicate {
+    my $length = shift;
+    my $a = shift;
+    my $b = shift;
+    my $adur = abs($length - video_duration($a));
+    my $bdur = abs($length - video_duration($b));
+
+    # If the difference is more than one minute, then we get the
+    # one that has the least difference.  If not, we get the one
+    # with the most difference.  This way we should be assured getting
+    # some difference, but not a huge difference.
+    return $adur <=> $bdur;
+    if ($adur > 60 || $bdur > 60) {
+	return $adur <=> $bdur;
+    } else {
+	return $bdur <=> $adur;
+    }
+}
+
 # Given a search term, return the URL.
 sub get_video_id {
     my $search = shift;
@@ -20,18 +38,25 @@ sub get_video_id {
     system("curl",
 	   "-s",
 	   "-o", "/tmp/flutter.url",
-	   "https://gdata.youtube.com/feeds/api/videos?q=$search&max-results=1&v=2");
-    
+	   "https://gdata.youtube.com/feeds/api/videos?q=$search&max-results=10&v=2");
+
     my $parser = XML::LibXML->new();
     my $xmldoc = $parser->parse_file("/tmp/flutter.url");
-    my $content = ($xmldoc->getElementsByTagName('content'))[0];
+    my @entries = $xmldoc->getElementsByTagName('entry');
 
-    if (! $content) {
-	print "Can't find URL\n";
-	return;
+    if ($#entries < 0) {
+ 	print "Can't find URL\n";
+ 	return;
     }
-    
-    my $url = $content->getAttribute("src");
+
+    # Sort the results so that we choose the video that has the length
+    # that's least close to our target song, except really big
+    # differences.
+    @entries = sort { video_predicate($length, $a, $b) } @entries;
+
+    my $best_entry = $entries[0];
+    print "Best length is " . video_duration($best_entry) . "\n";
+    my $url = ($best_entry->getElementsByTagName('content'))[0]->getAttribute("src");
     print "$url\n";
     if ($url =~ /com\/v\/([-_a-zA-Z0-9]+)\?/) {
 	return $1;
