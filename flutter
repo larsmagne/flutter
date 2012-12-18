@@ -41,7 +41,7 @@ sub get_video_id {
     print "Best length is " . video_duration($best_entry) . "\n";
     my $url = ($best_entry->getElementsByTagName('content'))[0]->getAttribute("src");
     print "$url\n";
-    if ($url =~ /com\/v\/([-a-zA-Z0-9]+)\?/) {
+    if ($url =~ /com\/v\/([-_a-zA-Z0-9]+)\?/) {
 	return $1;
     } else {
 	return;
