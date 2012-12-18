@@ -53,7 +53,6 @@ sub kill_mplayer {
     if ($pid) {
 	print "Killing player $pid\n";
 	kill 9, $pid;
-	system("kill", "-9", "$pid");
     }
     system("pkill mplayer");
 }
