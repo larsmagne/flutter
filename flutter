@@ -20,26 +20,18 @@ sub get_video_id {
     system("curl",
 	   "-s",
 	   "-o", "/tmp/flutter.url",
-	   "https://gdata.youtube.com/feeds/api/videos?q=$search&max-results=2&v=2");
+	   "https://gdata.youtube.com/feeds/api/videos?q=$search&max-results=1&v=2");
     
     my $parser = XML::LibXML->new();
     my $xmldoc = $parser->parse_file("/tmp/flutter.url");
+    my $content = ($xmldoc->getElementsByTagName('content'))[0];
 
-    my @entries = $xmldoc->getElementsByTagName('entry');
-
-    if ($#entries < 1) {
+    if (! $content) {
 	print "Can't find URL\n";
 	return;
     }
-
-    # Sort the results so that we choose the video that has the length
-    # that's closest to our target song.
-    @entries = sort { abs($length - video_duration($a)) <=>
-			  abs($length - video_duration($b)) } @entries;
-
-    my $best_entry = $entries[0];
-    print "Best length is " . video_duration($best_entry) . "\n";
-    my $url = ($best_entry->getElementsByTagName('content'))[0]->getAttribute("src");
+    
+    my $url = $content->getAttribute("src");
     print "$url\n";
     if ($url =~ /com\/v\/([-_a-zA-Z0-9]+)\?/) {
 	return $1;
@@ -100,11 +92,7 @@ sub refresh {
     $track = uri_escape($track);
 
     my $length = duration($current);
-    my $video_id = get_video_id("$artist+$album+$track", $length);
-    
-    if (! $video_id) {
-	$video_id = get_video_id("$artist+$track", $length);
-    }
+    my $video_id = get_video_id("$artist+$track", $length);
     
     if ($video_id) {
 	my $url = `youtube-dl -g 'http://www.youtube.com/watch?v=$video_id&feature=related'`;
