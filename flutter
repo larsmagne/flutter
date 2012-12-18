@@ -13,14 +13,14 @@ sub video_duration {
 }
 
 # Given a search term, return the URL.
-sub get_url {
+sub get_video_id {
     my $search = shift;
     my $length = shift;
     print "Searching for $search ($length)\n";
     system("curl",
 	   "-s",
 	   "-o", "/tmp/flutter.url",
-	   "https://gdata.youtube.com/feeds/api/videos?q=$search&max-results=20&v=2");
+	   "https://gdata.youtube.com/feeds/api/videos?q=$search&max-results=2&v=2");
     
     my $parser = XML::LibXML->new();
     my $xmldoc = $parser->parse_file("/tmp/flutter.url");
@@ -39,7 +39,13 @@ sub get_url {
 
     my $best_entry = $entries[0];
     print "Best length is " . video_duration($best_entry) . "\n";
-    return ($best_entry->getElementsByTagName('content'))[0]->getAttribute("src");
+    my $url = ($best_entry->getElementsByTagName('content'))[0]->getAttribute("src");
+    print "$url\n";
+    if ($url =~ /com\/v\/([-a-zA-Z0-9]+)\?/) {
+	return $1;
+    } else {
+	return;
+    }
 }
 
 sub kill_mplayer {
@@ -65,23 +71,16 @@ sub duration {
     return $length;
 }
 
-sub play_file {
-    my $file = shift;
-    print "Player pid $mplayer_pid\n";
+sub play_url {
+    my $url = shift;
     while (true) {
-	my $ffile;
-	if (-f "$file.part") {
-	    $ffile = "$file.part";
-	} else {
-	    $ffile = $file;
-	}
 	system("mplayer",
 	       "-volume", "0",
 	       "-softvol",
 	       "-msglevel", "all=-1",
 	       "-zoom", "-fs",
 	       "-display", ":1",
-	       $ffile);
+	       $url);
     }
     exit(0);
 }
@@ -102,49 +101,24 @@ sub refresh {
     $track = uri_escape($track);
 
     my $length = duration($current);
-    my $url = get_url("$artist+$album+$track", $length);
+    my $video_id = get_video_id("$artist+$album+$track", $length);
     
-    if (! $url) {
-	$url = get_url("$artist+$track", $length);
+    if (! $video_id) {
+	$video_id = get_video_id("$artist+$track", $length);
     }
     
-    if ($url) {
-	my $hash = Digest::SHA1::sha1_base64($url);
-	$hash =~ s#/#-#g;
-	if (! -f "$cache/$hash" &&
-	    ! -f "$cache/$hash.part") {
+    if ($video_id) {
+	my $url = `youtube-dl -g 'http://www.youtube.com/watch?v=$video_id&feature=related'`;
+	print "url $url\n";
+	if ($url) {
+	    chop($url);
 	    my $old_pid = $mplayer_pid;
 	    $mplayer_pid = fork();
 	    if ($mplayer_pid) {
 		return;
 	    } else {
-		print "Downloading $url $hash\n";
-		if (! fork()) {
-		    system("youtube-dl",
-			   "-o", "$cache/$hash",
-			   $url);
-		    chdir($cache);
-		    # Add a symlink from the name of the song just
-		    # because.
-		    symlink($hash,
-			    $current[$#current - 2] . "_" .
-			    $current[$#current - 1] . "_" .
-			    $current[$#current] . ".flv");
-		    exit(0);
-		}
-		# We give youtube-dl five seconds head start before
-		# starting mplayer.
-		sleep(5);
 		kill_mplayer($old_pid);
-		play_file("$cache/$hash");
-	    }
-	} else {
-	    my $old_pid = $mplayer_pid;
-	    $mplayer_pid = fork();
-	    if (! $mplayer_pid) {
-		play_file("$cache/$hash");
-	    } else {
-		kill_mplayer($old_pid);
+		play_url($url);
 	    }
 	}
     }
