@@ -1,5 +1,9 @@
 #!/usr/bin/perl
 
+# I'm unsure where this program came from.  I doubt that I've written
+# it myself (due to the coding style), so I must have found it
+# somewhere.
+
 use X11::Protocol;
 use Tk;
 
