@@ -22,7 +22,6 @@ sub video_predicate {
     # one that has the least difference.  If not, we get the one
     # with the most difference.  This way we should be assured getting
     # some difference, but not a huge difference.
-    return $adur <=> $bdur;
     if ($adur > 60 || $bdur > 60) {
 	return $adur <=> $bdur;
     } else {
@@ -54,10 +53,16 @@ sub get_video_id {
     # differences.
     @entries = sort { video_predicate($length, $a, $b) } @entries;
 
+    foreach $entry (@entries) {
+	print video_duration($entry) . "\n";
+    }
+    
     my $best_entry = $entries[0];
     print "Best length is " . video_duration($best_entry) . "\n";
     my $url = ($best_entry->getElementsByTagName('content'))[0]->getAttribute("src");
     print "$url\n";
+    my $title = ($best_entry->getElementsByTagName('title'))[0]->to_literal;
+    print "$title\n";
     if ($url =~ /com\/v\/([-_a-zA-Z0-9]+)\?/) {
 	return $1;
     } else {
