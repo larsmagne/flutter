@@ -99,6 +99,7 @@ sub play_url {
 	       "-volume", "0",
 	       "-softvol",
 	       "-msglevel", "all=-1",
+	       "-loop", "0",
 	       "-zoom", "-fs",
 	       "-display", ":1",
 	       $url);
