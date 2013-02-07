@@ -5,6 +5,7 @@ $update_file = $ARGV[0];
 use XML::LibXML;
 use Digest::SHA1;
 use URI::Escape;
+use POSIX qw(:sys_wait_h);
 
 sub video_duration {
     my $entry = shift;
@@ -97,13 +98,11 @@ $mplayer = 0;
 sub play_url {
     my $url = shift;
     while (true) {
-	open(PID, ">/tmp/mplayer.pid");
-	print PID $mplayer++;
-	close PID;
 	system("mplayer",
 	       "-volume", "0",
 	       "-softvol",
 	       "-msglevel", "all=-1",
+	       "-cache", "500",
 	       "-zoom", "-fs",
 	       "-display", ":1",
 	       $url);
@@ -153,4 +152,7 @@ while (true) {
     }
     $last_timestamp = $timestamp;
     sleep(1);
+    do {
+	$kid = waitpid -1, WNOHANG;
+    } while $kid > 0;
 }
