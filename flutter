@@ -146,12 +146,15 @@ sub refresh {
     }
 }
 
+$last_play = time;
+
 while (true) {
     $timestamp = (stat($update_file))[9];
     if ($timestamp > $last_timestamp ||
 	# Do a refresh every hour, because Youtube stops responding to
 	# the same URL after a while.
-	time - (60 * 60) > $timestamp) {
+	time - (60 * 60) > $last_play) {
+	$last_play = time;
 	refresh();
     }
     $last_timestamp = $timestamp;
