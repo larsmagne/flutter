@@ -42,6 +42,8 @@ sub get_video_id {
 
     my $parser = XML::LibXML->new();
     my $xmldoc = $parser->parse_file("/tmp/flutter.url");
+    return if (! $xmldoc);
+    
     my @entries = $xmldoc->getElementsByTagName('entry');
 
     if ($#entries < 0) {
@@ -107,6 +109,7 @@ sub play_url {
 	       "-zoom", "-fs",
 	       "-display", ":1",
 	       $url);
+	sleep(2);
     }
     exit(0);
 }
@@ -119,6 +122,8 @@ sub refresh {
     chop($current);
     my @current = split("/", $current);
 
+    return if ($#current) < 2;
+    
     my $track = $current[$#current];
     $track =~ s/^[0-9][0-9]-|.mp3$|.flac$//g;
 
@@ -127,10 +132,13 @@ sub refresh {
     $track = uri_escape($track);
 
     my $length = duration($current);
-    my $video_id = get_video_id("$artist+$track", $length);
+    my $video_id;
+    eval {
+	$video_id = get_video_id("$artist+$track", $length);
+    };
     
     if ($video_id) {
-	my $url = `youtube-dl -g 'http://www.youtube.com/watch?v=$video_id&feature=related'`;
+	my $url = `youtube-dl --prefer-insecure -g 'http://www.youtube.com/watch?v=$video_id&feature=related'`;
 	print "url $url\n";
 	if ($url) {
 	    chop($url);
