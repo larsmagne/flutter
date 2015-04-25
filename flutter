@@ -42,8 +42,11 @@ sub get_video_id {
 
     my $parser = XML::LibXML->new();
     my $xmldoc = $parser->parse_file("/tmp/flutter.url");
-    return if (! $xmldoc);
-    
+    if (! $xmldoc) {
+	print "Unable to parse XML\n";
+	return;
+    }
+
     my @entries = $xmldoc->getElementsByTagName('entry');
 
     if ($#entries < 0) {
@@ -57,15 +60,16 @@ sub get_video_id {
     @entries = sort { video_predicate($length, $a, $b) } @entries;
 
     foreach $entry (@entries) {
-	print video_duration($entry) . "\n";
+	my $title = ($entry->getElementsByTagName('title'))[0]->to_literal;
+	print "Duration: " . video_duration($entry) . " ($title)\n";
     }
     
     my $best_entry = $entries[0];
     print "Best length is " . video_duration($best_entry) . "\n";
     my $url = ($best_entry->getElementsByTagName('content'))[0]->getAttribute("src");
-    print "$url\n";
+    print "Best URL: $url\n";
     my $title = ($best_entry->getElementsByTagName('title'))[0]->to_literal;
-    print "$title\n";
+    print "Best title: $title\n";
     if ($url =~ /com\/v\/([-_a-zA-Z0-9]+)\?/) {
 	return $1;
     } else {
@@ -138,8 +142,8 @@ sub refresh {
     };
     
     if ($video_id) {
-	my $url = `youtube-dl --prefer-insecure -g 'http://www.youtube.com/watch?v=$video_id&feature=related'`;
-	print "url $url\n";
+	my $url = `youtube-dl -g 'http://www.youtube.com/watch?v=$video_id&feature=related'`;
+	print "youtube-dl url $url\n";
 	if ($url) {
 	    chop($url);
 	    my $old_pid = $mplayer_pid;
@@ -155,6 +159,11 @@ sub refresh {
 }
 
 $last_play = time;
+
+if ($ARGV[1]) {
+    get_video_id($ARGV[1], 200);
+    exit;
+}
 
 while (true) {
     $timestamp = (stat($update_file))[9];
