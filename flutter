@@ -2,14 +2,16 @@
 
 $update_file = $ARGV[0];
 
-use XML::LibXML;
 use Digest::SHA1;
 use URI::Escape;
 use POSIX qw(:sys_wait_h);
+use JSON;
+use Path::Class;
+use Data::Dumper;
 
 sub video_duration {
     my $entry = shift;
-    return ($entry->getElementsByTagName('yt:duration'))[0]->getAttribute("seconds");
+    return $entry->[1];
 }
 
 sub video_predicate {
@@ -35,20 +37,61 @@ sub get_video_id {
     my $search = shift;
     my $length = shift;
     print "Searching for $search ($length)\n";
+
+    # First find all the matching video IDs.
     system("curl",
 	   "-s",
 	   "-o", "/tmp/flutter.url",
-	   "https://gdata.youtube.com/feeds/api/videos?q=$search&max-results=10&v=2");
+	   "https://www.googleapis.com/youtube/v3/search?part=snippet&order=viewCount&q=$search&type=video&maxResults=10&key=$api_key");
 
-    my $parser = XML::LibXML->new();
-    my $xmldoc = $parser->parse_file("/tmp/flutter.url");
-    if (! $xmldoc) {
-	print "Unable to parse XML\n";
+    my $file = file('/tmp/flutter.url');
+    $text = $file->slurp();
+
+    my $json = decode_json $text;
+    if (! $json) {
+	print "Unable to parse JSON\n";
 	return;
     }
 
-    my @entries = $xmldoc->getElementsByTagName('entry');
+    my $ids;
+    $items = $json->{"items"};
+    foreach my $item (@$items) { 
+	my $id = $item->{"id"}->{"videoId"};
+	if (! $ids) {
+	    $ids = $id;
+	} else {
+	    $ids .= ",$id";
+	}
+    }
 
+    # Then query again to get the duration of all these IDs.
+    system("curl",
+	   "-s",
+	   "-o", "/tmp/flutter.url",
+	   "https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=$ids&maxResults=30&key=$api_key");
+
+    my $file = file('/tmp/flutter.url');
+    $text = $file->slurp();
+
+    my $json = decode_json $text;
+    if (! $json) {
+	print "Unable to parse JSON\n";
+	return;
+    }
+
+    my $i = 0;
+    $items = $json->{"items"};
+    foreach my $item (@$items) { 
+	my $title = $item->{"snippet"}->{"title"};
+	my $id = $item->{"id"};
+	my $duration = $item->{"contentDetails"}->{"duration"};
+	# Durations are on the format "PT3M59S".
+	if ($duration =~ /PT([0-9]+)M([0-9]+)S/) {
+	    $duration = $1 * 60 + $2;
+	    $entries[$i++] = [$id, $duration, $title];
+	}
+    }
+    
     if ($#entries < 0) {
  	print "Can't find URL\n";
  	return;
@@ -60,21 +103,15 @@ sub get_video_id {
     @entries = sort { video_predicate($length, $a, $b) } @entries;
 
     foreach $entry (@entries) {
-	my $title = ($entry->getElementsByTagName('title'))[0]->to_literal;
+	my $title = $entry->[2];
 	print "Duration: " . video_duration($entry) . " ($title)\n";
     }
     
     my $best_entry = $entries[0];
     print "Best length is " . video_duration($best_entry) . "\n";
-    my $url = ($best_entry->getElementsByTagName('content'))[0]->getAttribute("src");
-    print "Best URL: $url\n";
-    my $title = ($best_entry->getElementsByTagName('title'))[0]->to_literal;
-    print "Best title: $title\n";
-    if ($url =~ /com\/v\/([-_a-zA-Z0-9]+)\?/) {
-	return $1;
-    } else {
-	return;
-    }
+    print "Best ID: " . $best_entry->[0] . "\n";
+    print "Best title: " . $best_entry->[2] . "\n";
+    return $best_entry->[0];
 }
 
 sub kill_mplayer {
@@ -159,6 +196,10 @@ sub refresh {
 }
 
 $last_play = time;
+
+open(API, "$ENV{HOME}/.youtube_api_key") || die $!;
+$api_key = <API>;
+chomp($api_key);
 
 if ($ARGV[1]) {
     get_video_id($ARGV[1], 200);
