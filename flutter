@@ -120,7 +120,7 @@ sub kill_mplayer {
 	print "Killing player $pid\n";
 	kill 9, $pid;
     }
-    system("pkill mplayer");
+    system("pkill -9 mplayer");
 }
 
 sub duration {
@@ -179,7 +179,7 @@ sub refresh {
     };
     
     if ($video_id) {
-	my $url = `youtube-dl -g 'http://www.youtube.com/watch?v=$video_id&feature=related'`;
+	my $url = `youtube-dl -g 'http://www.youtube.com/watch?v=$video_id&feature=related' 2>/dev/null | head -n 1`;
 	print "youtube-dl url $url\n";
 	if ($url) {
 	    chop($url);
