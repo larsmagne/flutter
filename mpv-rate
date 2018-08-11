@@ -1,0 +1,35 @@
+#!/bin/bash
+
+url="$1"
+
+if [ "$url" = "" ]; then
+    echo "Usage: $0 <url>"
+    exit
+fi
+
+socket="/tmp/mpv-$$"
+
+if [ -e "$socket" ]; then
+    rm "$socket"
+fi
+
+DISPLAY=:1 /usr/src/mpv/build/mpv -vo=x11 --no-audio --quiet --input-ipc-server="$socket" --fullscreen "$url" >/dev/null 2>/dev/null &
+
+mpv="$!"
+
+times=0
+while ps -p $mpv >/dev/null; do
+    data=$(echo '{ "command": ["get_property", "video-bitrate"] }' | socat - "$socket")
+    state=$(jq -r .error <<< "$data")
+    if [ "$state" = "success" ]; then
+	rate=$(jq -r .data <<< "$data")
+	total=$(($total + $rate))
+	times=$(($times + 1))
+	echo $(($total / $times))
+    fi
+    sleep 1
+done
+
+rm -f "$socket"
+
+echo $(($total / $times))
