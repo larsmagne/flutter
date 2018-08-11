@@ -1,9 +1,17 @@
 #!/bin/bash
 
+# This is just a wrapper around mpv that outputs the total mean
+# bitrate at the end (and that exits if the bitrate is below the
+# optional cutoff.
+#
+# It requires socat (to talk to a socket) and jq (to parse JSON).  And
+# mpv, to play a video.
+
 url="$1"
+cutoff="$2"
 
 if [ "$url" = "" ]; then
-    echo "Usage: $0 <url>"
+    echo "Usage: $0 <url> [cutoff]"
     exit
 fi
 
@@ -26,6 +34,13 @@ while ps -p $mpv >/dev/null; do
 	total=$(($total + $rate))
 	times=$(($times + 1))
 	echo $(($total / $times))
+	if [ "$cutoff" != "" ]; then
+	    if [ $(($total / $times)) -lt "$cutoff" ]; then
+		echo $(($total / $times))
+		kill -9 $mpv
+		exit
+	    fi
+	fi
     fi
     sleep 1
 done
