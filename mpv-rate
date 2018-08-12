@@ -21,11 +21,21 @@ if [ -e "$socket" ]; then
     rm "$socket"
 fi
 
+if [ -e "/tmp/flutter1.png" ]; then
+    rm "/tmp/flutter1.png"
+fi
+
+if [ -e "/tmp/flutter2.png" ]; then
+    rm "/tmp/flutter2.png"
+fi
+
 DISPLAY=:1 /usr/src/mpv/build/mpv -vo=x11 --no-audio --quiet --input-ipc-server="$socket" --fullscreen "$url" >/dev/null 2>/dev/null &
 
 mpv="$!"
 
 times=0
+difftimes=0
+totaldiff=0
 while ps -p $mpv >/dev/null; do
     data=$(echo '{ "command": ["get_property", "video-bitrate"] }' | socat - "$socket")
     state=$(jq -r .error <<< "$data")
@@ -33,7 +43,6 @@ while ps -p $mpv >/dev/null; do
 	rate=$(jq -r .data <<< "$data")
 	total=$(($total + $rate))
 	times=$(($times + 1))
-	echo $(($total / $times))
 	if [ "$cutoff" != "" ]; then
 	    if [ $(($total / $times)) -lt "$cutoff" ]; then
 		echo $(($total / $times))
@@ -41,10 +50,32 @@ while ps -p $mpv >/dev/null; do
 		exit
 	    fi
 	fi
+	if [ $(($times % 2)) -eq 0 ]; then
+	    socat - "$socket" >/dev/null <<< '{ "command": ["screenshot-to-file", "/tmp/flutter1.png"] }'
+	else
+	    socat - "$socket" >/dev/null <<< '{ "command": ["screenshot-to-file", "/tmp/flutter2.png"] }'
+	fi
+	if [ -e "/tmp/flutter1.png" -a -e "/tmp/flutter2.png" ]; then
+	    diff=$(compare -metric NCC "/tmp/flutter1.png" "/tmp/flutter2.png" null: 2>&1)
+	    difftimes=$(($difftimes + 1))
+	    totaldiff=$(echo $totaldiff $diff + p | dc)
+	fi
     fi
     sleep 1
 done
 
 rm -f "$socket"
 
-echo $(($total / $times))
+if [ $times -gt 0 ]; then
+    echo -n $(($total / $times))
+else
+    echo -n 0
+fi
+
+echo -n " "
+
+if [ $difftimes -gt 0 ]; then
+    echo 4 k $totaldiff $difftimes / p | dc
+else
+    echo 0
+fi
