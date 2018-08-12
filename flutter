@@ -2,12 +2,24 @@
 
 $update_file = $ARGV[0];
 
-use Digest::SHA1;
+use Digest::SHA;
 use URI::Escape;
 use POSIX qw(:sys_wait_h);
 use JSON;
 use Path::Class;
 use Data::Dumper;
+use IPC::Open2;
+use DBI;
+
+if (! -d "/home/larsi/.config/flutter") {
+    mkdir "/home/larsi/.config/flutter";
+}
+
+my $diff_cutoff = 0.99;
+
+my $db = DBI->connect('dbi:SQLite:dbname=/home/larsi/.config/flutter/flutter.sqlite','','',{AutoCommit=>1,RaiseError=>1,PrintError=>0});
+
+$db->do("CREATE TABLE IF NOT EXISTS videos (id varchar2(50) PRIMARY KEY, rate number, diff number)");
 
 sub video_duration {
     my $entry = shift;
@@ -85,10 +97,14 @@ sub get_video_id {
 	my $title = $item->{"snippet"}->{"title"};
 	my $id = $item->{"id"};
 	my $duration = $item->{"contentDetails"}->{"duration"};
-	# Durations are on the format "PT3M59S".
-	if ($duration =~ /PT([0-9]+)M([0-9]+)S/) {
-	    $duration = $1 * 60 + $2;
-	    $entries[$i++] = [$id, $duration, $title];
+	my $diff = $db->selectrow_array("SELECT diff FROM videos WHERE id = '$id'");
+	print "Diff '$diff'\n";
+	if ($diff eq "" || $diff < $diff_cutoff) {
+	    # Durations are on the format "PT3M59S".
+	    if ($duration =~ /PT([0-9]+)M([0-9]+)S/) {
+		$duration = $1 * 60 + $2;
+		$entries[$i++] = [$id, $duration, $title];
+	    }
 	}
     }
     
@@ -120,6 +136,7 @@ sub kill_mplayer {
 	print "Killing player $pid\n";
 	kill 9, $pid;
     }
+    system("pkill -9 mpv");
     system("pkill -9 mplayer");
 }
 
@@ -140,17 +157,35 @@ $mplayer = 0;
 
 sub play_url {
     my $url = shift;
+    my $id = shift;
+    open(URL, ">/tmp/flutter-url") || die;
+    print URL "$url\n";
+    close URL;
+    my $rates;
+    
     while (true) {
-	system("mplayer",
-	       "-volume", "0",
-	       "-softvol",
-	       "-msglevel", "all=-1",
-	       "-quiet",
-	       "-cache", "500",
-	       "-zoom", "-fs",
-	       "-display", ":1",
-	       $url);
+	my $pid = open2(\*CHLD_OUT, \*CHLD_IN,
+			"/home/larsi/src/flutter/mpv-rate", $url,
+			"diff", $diff_cutoff);
+	waitpid($pid, 0);
+	$rates = <CHLD_OUT>;
+	chop $rates;
+	($rate, $diff) = split / /, $rates;
+	if ($rate eq "") {
+	    $rate = 0;
+	}
+	if ($diff eq "") {
+	    $diff = 1;
+	}
+	my $old = $db->selectrow_array("SELECT id FROM videos WHERE id = '$id'");
+	if (! $old) {
+	    $db->do("insert into videos values ('$id', '$rate', '$diff')");
+	}
+	print "Rates $rates $rate $diff\n";
 	sleep(2);
+	if ($diff > $diff_cutoff) {
+	    exit(0);
+	}
     }
     exit(0);
 }
@@ -189,7 +224,7 @@ sub refresh {
 		return;
 	    } else {
 		kill_mplayer($old_pid);
-		play_url($url);
+		play_url($url, $video_id);
 	    }
 	}
     }
@@ -209,6 +244,7 @@ if ($ARGV[1]) {
 while (true) {
     $timestamp = (stat($update_file))[9];
     if ($timestamp > $last_timestamp ||
+	($mplayer_pid && ! kill 0, $mplayer_pid) ||
 	# Do a refresh every hour, because Youtube stops responding to
 	# the same URL after a while.
 	time - (60 * 60) > $last_play) {
