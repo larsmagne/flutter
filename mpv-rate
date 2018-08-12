@@ -8,26 +8,47 @@
 # mpv, to play a video.
 
 url="$1"
-cutoff="$2"
+type="$2"
+cutoff="$3"
 
 if [ "$url" = "" ]; then
-    echo "Usage: $0 <url> [cutoff]"
+    echo "Usage: $0 <url> [type cutoff]"
     exit
 fi
 
 socket="/tmp/mpv-$$"
 
-if [ -e "$socket" ]; then
-    rm "$socket"
-fi
+function clean {
+    if [ -e "$socket" ]; then
+	rm "$socket"
+    fi
+    
+    if [ -e "/tmp/flutter1.png" ]; then
+	rm "/tmp/flutter1.png"
+    fi
+    
+    if [ -e "/tmp/flutter2.png" ]; then
+	rm "/tmp/flutter2.png"
+    fi
+}
 
-if [ -e "/tmp/flutter1.png" ]; then
-    rm "/tmp/flutter1.png"
-fi
+function results {
+    if [ $times -gt 0 ]; then
+	echo -n $(($total / $times))
+    else
+	echo -n 0
+    fi
 
-if [ -e "/tmp/flutter2.png" ]; then
-    rm "/tmp/flutter2.png"
-fi
+    echo -n " "
+
+    if [ $difftimes -gt 0 ]; then
+	echo 4 k $totaldiff $difftimes / p | dc
+    else
+	echo 0
+    fi
+}
+
+clean
 
 DISPLAY=:1 /usr/src/mpv/build/mpv -vo=x11 --no-audio --quiet --input-ipc-server="$socket" --fullscreen "$url" >/dev/null 2>/dev/null &
 
@@ -43,13 +64,7 @@ while ps -p $mpv >/dev/null; do
 	rate=$(jq -r .data <<< "$data")
 	total=$(($total + $rate))
 	times=$(($times + 1))
-	if [ "$cutoff" != "" ]; then
-	    if [ $(($total / $times)) -lt "$cutoff" ]; then
-		echo $(($total / $times))
-		kill -9 $mpv
-		exit
-	    fi
-	fi
+
 	if [ $(($times % 2)) -eq 0 ]; then
 	    socat - "$socket" >/dev/null <<< '{ "command": ["screenshot-to-file", "/tmp/flutter1.png"] }'
 	else
@@ -58,24 +73,35 @@ while ps -p $mpv >/dev/null; do
 	if [ -e "/tmp/flutter1.png" -a -e "/tmp/flutter2.png" ]; then
 	    diff=$(compare -metric NCC "/tmp/flutter1.png" "/tmp/flutter2.png" null: 2>&1)
 	    difftimes=$(($difftimes + 1))
+	    echo $diff
 	    totaldiff=$(echo $totaldiff $diff + p | dc)
+	fi
+
+	if [ "$cutoff" != "" ]; then
+	    if [ "$type" = "rate" ]; then
+		if [ $(($total / $times)) -lt "$cutoff" ]; then
+		    clean
+		    results
+		    kill -9 $mpv
+		    exit
+		fi
+	    else
+		if [ $difftimes -gt 2 ]; then
+		    diff=$(echo 4 k $totaldiff $difftimes / 10000 \* p | dc | sed 's/[.].*//')
+		    cut=$(echo 4 k $cutoff 1 / 10000 \* p | dc | sed 's/[.].*//')
+		    if [ $diff -gt $cut ]; then
+			clean
+			results
+			kill -9 $mpv
+			exit
+		    fi
+		fi
+	    fi
+	    
 	fi
     fi
     sleep 1
 done
 
-rm -f "$socket"
-
-if [ $times -gt 0 ]; then
-    echo -n $(($total / $times))
-else
-    echo -n 0
-fi
-
-echo -n " "
-
-if [ $difftimes -gt 0 ]; then
-    echo 4 k $totaldiff $difftimes / p | dc
-else
-    echo 0
-fi
+clean
+results
