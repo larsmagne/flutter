@@ -65,16 +65,17 @@ while ps -p $mpv >/dev/null; do
 	total=$(($total + $rate))
 	times=$(($times + 1))
 
-	if [ $(($times % 2)) -eq 0 ]; then
-	    socat - "$socket" >/dev/null <<< '{ "command": ["screenshot-to-file", "/tmp/flutter1.png"] }'
-	else
-	    socat - "$socket" >/dev/null <<< '{ "command": ["screenshot-to-file", "/tmp/flutter2.png"] }'
-	fi
-	if [ -e "/tmp/flutter1.png" -a -e "/tmp/flutter2.png" ]; then
-	    diff=$(compare -metric NCC "/tmp/flutter1.png" "/tmp/flutter2.png" null: 2>&1)
-	    difftimes=$(($difftimes + 1))
-	    echo $diff
-	    totaldiff=$(echo $totaldiff $diff + p | dc)
+	if [ $times -lt 20 ]; then
+	    if [ $(($times % 2)) -eq 0 ]; then
+		socat - "$socket" >/dev/null <<< '{ "command": ["screenshot-to-file", "/tmp/flutter1.png"] }'
+	    else
+		socat - "$socket" >/dev/null <<< '{ "command": ["screenshot-to-file", "/tmp/flutter2.png"] }'
+	    fi
+	    if [ -e "/tmp/flutter1.png" -a -e "/tmp/flutter2.png" ]; then
+		diff=$(compare -metric NCC "/tmp/flutter1.png" "/tmp/flutter2.png" null: 2>&1)
+		difftimes=$(($difftimes + 1))
+		totaldiff=$(echo $totaldiff $diff + p | dc)
+	    fi
 	fi
 
 	if [ "$cutoff" != "" ]; then
@@ -86,7 +87,7 @@ while ps -p $mpv >/dev/null; do
 		    exit
 		fi
 	    else
-		if [ $difftimes -gt 2 ]; then
+		if [ $difftimes -gt 8 ]; then
 		    diff=$(echo 4 k $totaldiff $difftimes / 10000 \* p | dc | sed 's/[.].*//')
 		    cut=$(echo 4 k $cutoff 1 / 10000 \* p | dc | sed 's/[.].*//')
 		    if [ $diff -gt $cut ]; then
