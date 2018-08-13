@@ -16,21 +16,23 @@ if [ "$url" = "" ]; then
     exit
 fi
 
-socket="/tmp/mpv-$$"
+socket="/var/tmp/flutter/mpv-$$"
 
 function clean {
     if [ -e "$socket" ]; then
 	rm "$socket"
     fi
     
-    if [ -e "/tmp/flutter1.png" ]; then
-	rm "/tmp/flutter1.png"
+    if [ -e "/var/tmp/flutter/flutter1.png" ]; then
+	rm "/var/tmp/flutter/flutter1.png"
     fi
     
-    if [ -e "/tmp/flutter2.png" ]; then
-	rm "/tmp/flutter2.png"
+    if [ -e "/var/tmp/flutter/flutter2.png" ]; then
+	rm "/var/tmp/flutter/flutter2.png"
     fi
 }
+
+trap clean EXIT
 
 function results {
     if [ $times -gt 0 ]; then
@@ -44,7 +46,7 @@ function results {
     if [ $difftimes -gt 0 ]; then
 	echo 4 k $totaldiff $difftimes / p | dc
     else
-	echo 0
+	echo 1
     fi
 }
 
@@ -66,15 +68,23 @@ while ps -p $mpv >/dev/null; do
 	times=$(($times + 1))
 
 	if [ $times -lt 20 ]; then
-	    if [ $(($times % 2)) -eq 0 ]; then
-		socat - "$socket" >/dev/null <<< '{ "command": ["screenshot-to-file", "/tmp/flutter1.png"] }'
-	    else
-		socat - "$socket" >/dev/null <<< '{ "command": ["screenshot-to-file", "/tmp/flutter2.png"] }'
+	    if [ -e "/var/tmp/flutter/flutter1.png" -a -e "/var/tmp/flutter/flutter2.png" ]; then
+		diff=$(compare -metric NCC "/var/tmp/flutter/flutter1.png" "/var/tmp/flutter/flutter2.png" null: 2>&1)
+		if ! echo "$diff" | grep compare >/dev/null; then
+		    difftimes=$(($difftimes + 1))
+		    echo "Diff '$diff'" >> /var/tmp/flutter/diffs
+		    echo "Difftimes '$difftimes'" >> /var/tmp/flutter/diffs
+		    totaldiff=$(echo $totaldiff $diff + p | dc)
+		    echo "totaldiff '$totaldiff'" >> /var/tmp/flutter/diffs
+		fi
 	    fi
-	    if [ -e "/tmp/flutter1.png" -a -e "/tmp/flutter2.png" ]; then
-		diff=$(compare -metric NCC "/tmp/flutter1.png" "/tmp/flutter2.png" null: 2>&1)
-		difftimes=$(($difftimes + 1))
-		totaldiff=$(echo $totaldiff $diff + p | dc)
+
+	    if [ $(($times % 2)) -eq 0 ]; then
+		rm -f /var/tmp/flutter/flutter1.png
+		socat - "$socket" >/dev/null <<< '{ "command": ["screenshot-to-file", "/var/tmp/flutter/flutter1.png"] }'
+	    else
+		rm -f /var/tmp/flutter/flutter2.png
+		socat - "$socket" >/dev/null <<< '{ "command": ["screenshot-to-file", "/var/tmp/flutter/flutter2.png"] }'
 	    fi
 	fi
 
@@ -87,13 +97,13 @@ while ps -p $mpv >/dev/null; do
 		    exit
 		fi
 	    else
-		if [ $difftimes -gt 8 ]; then
+		if [ $difftimes -gt 4 ]; then
 		    diff=$(echo 4 k $totaldiff $difftimes / 10000 \* p | dc | sed 's/[.].*//')
 		    cut=$(echo 4 k $cutoff 1 / 10000 \* p | dc | sed 's/[.].*//')
 		    if [ $diff -gt $cut ]; then
 			clean
 			results
-			kill -9 $mpv
+			#kill -9 $mpv
 			exit
 		    fi
 		fi
