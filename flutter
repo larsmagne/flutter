@@ -1,6 +1,7 @@
 #!/usr/bin/perl
 
 $update_file = $ARGV[0];
+$no_cut_static = $ARGV[1];
 
 use Digest::SHA;
 use URI::Escape;
@@ -15,7 +16,11 @@ if (! -d "/home/larsi/.config/flutter") {
     mkdir "/home/larsi/.config/flutter";
 }
 
-my $diff_cutoff = 0.99;
+if ($no_cut_static) {
+    $diff_cutoff = 1;
+} else {
+    $diff_cutoff = 0.95;
+}
 
 my $db = DBI->connect('dbi:SQLite:dbname=/home/larsi/.config/flutter/flutter.sqlite','','',{AutoCommit=>1,RaiseError=>1,PrintError=>0});
 
@@ -49,6 +54,7 @@ sub get_video_id {
     my $search = shift;
     my $length = shift;
     print "Searching for $search ($length)\n";
+    my @entries = ();
 
     # First find all the matching video IDs.
     system("curl",
@@ -98,7 +104,7 @@ sub get_video_id {
 	my $id = $item->{"id"};
 	my $duration = $item->{"contentDetails"}->{"duration"};
 	my $diff = $db->selectrow_array("SELECT diff FROM videos WHERE id = '$id'");
-	print "Diff '$diff'\n";
+	print "Video $title ($diff)\n";
 	if ($diff eq "" || $diff < $diff_cutoff) {
 	    # Durations are on the format "PT3M59S".
 	    if ($duration =~ /PT([0-9]+)M([0-9]+)S/) {
@@ -118,26 +124,11 @@ sub get_video_id {
     # differences.
     @entries = sort { video_predicate($length, $a, $b) } @entries;
 
-    foreach $entry (@entries) {
-	my $title = $entry->[2];
-	print "Duration: " . video_duration($entry) . " ($title)\n";
-    }
-    
     my $best_entry = $entries[0];
     print "Best length is " . video_duration($best_entry) . "\n";
     print "Best ID: " . $best_entry->[0] . "\n";
     print "Best title: " . $best_entry->[2] . "\n";
     return $best_entry->[0];
-}
-
-sub kill_mplayer {
-    my $pid = shift;
-    if ($pid) {
-	print "Killing player $pid\n";
-	kill 9, $pid;
-    }
-    system("pkill -9 mpv");
-    system("pkill -9 mplayer");
 }
 
 sub duration {
@@ -162,11 +153,27 @@ sub play_url {
     print URL "$url\n";
     close URL;
     my $rates;
+    my $pid;
+
+    $SIG{INT} = sub {
+	print "Player $pid killing\n";
+	#system("pkill", "-P", $pid, "--signal", "INT");
+	exit(0);
+    };
     
     while (true) {
-	my $pid = open2(\*CHLD_OUT, \*CHLD_IN,
-			"/home/larsi/src/flutter/mpv-rate", $url,
-			"diff", $diff_cutoff);
+	$pid = open2(\*CHLD_OUT, \*CHLD_IN,
+		     "/home/larsi/src/flutter/mpv-rate", $url,
+		     "diff", $diff_cutoff);
+	sleep(1);
+	# Kill all other players that may be running behind this one.
+	open(PS, "pgrep mpv-rate |");
+	while (<PS>) {
+	    chop;
+	    #system("pkill", "-P", $_) if ($_ ne $pid);
+	    kill INT, $_ if ($_ ne $pid);
+	}
+	close PS;
 	waitpid($pid, 0);
 	$rates = <CHLD_OUT>;
 	chop $rates;
@@ -181,7 +188,7 @@ sub play_url {
 	if (! $old) {
 	    $db->do("insert into videos values ('$id', '$rate', '$diff')");
 	}
-	print "Rates $rates $rate $diff\n";
+	print "Rates $rate $diff\n";
 	sleep(2);
 	if ($diff > $diff_cutoff) {
 	    exit(0);
@@ -209,13 +216,21 @@ sub refresh {
 
     my $length = duration($current);
     my $video_id;
-    eval {
-	$video_id = get_video_id("$artist+$track", $length);
-    };
+    my $string = "$artist+$track";
+    # If we can't find a match, keep chopping off words until we can.
+    while (true) {
+	eval {
+	    $video_id = get_video_id($string, $length);
+	};
+	last if ($video_id);
+	last if ($string eq "");
+	my @bits = split(/ /, uri_unescape($string));
+	$string = uri_escape(join ' ', @bits[0..$#bits-1]);
+	sleep(5);
+    }
     
     if ($video_id) {
 	my $url = `youtube-dl -g 'http://www.youtube.com/watch?v=$video_id&feature=related' 2>/dev/null | head -n 1`;
-	print "youtube-dl url $url\n";
 	if ($url) {
 	    chop($url);
 	    my $old_pid = $mplayer_pid;
@@ -223,7 +238,6 @@ sub refresh {
 	    if ($mplayer_pid) {
 		return;
 	    } else {
-		kill_mplayer($old_pid);
 		play_url($url, $video_id);
 	    }
 	}
@@ -248,6 +262,7 @@ while (true) {
 	# Do a refresh every hour, because Youtube stops responding to
 	# the same URL after a while.
 	time - (60 * 60) > $last_play) {
+	$mplayer_pid = 0;
 	$last_play = time;
 	refresh();
     }
