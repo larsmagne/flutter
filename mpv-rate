@@ -16,19 +16,21 @@ if [ "$url" = "" ]; then
     exit
 fi
 
-socket="/var/tmp/flutter/mpv-$$"
+tmp="/var/tmp/flutter"
+
+socket="$tmp/mpv-$$"
 
 function clean {
     if [ -e "$socket" ]; then
 	rm "$socket"
     fi
     
-    if [ -e "/var/tmp/flutter/flutter1.jpg" ]; then
-	rm "/var/tmp/flutter/flutter1.jpg"
+    if [ -e "$tmp/flutter1.jpg" ]; then
+	rm "$tmp/flutter1.jpg"
     fi
     
-    if [ -e "/var/tmp/flutter/flutter2.jpg" ]; then
-	rm "/var/tmp/flutter/flutter2.jpg"
+    if [ -e "$tmp/flutter2.jpg" ]; then
+	rm "$tmp/flutter2.jpg"
     fi
 }
 
@@ -76,23 +78,23 @@ while ps -p $mpv >/dev/null; do
 	times=$(($times + 1))
 
 	if [ $times -lt 20 ]; then
-	    if [ -e "/var/tmp/flutter/flutter1.jpg" -a -e "/var/tmp/flutter/flutter2.jpg" ]; then
-		diff=$(compare -metric NCC "/var/tmp/flutter/flutter1.jpg" "/var/tmp/flutter/flutter2.jpg" null: 2>&1)
+	    if [ -e "$tmp/flutter1.jpg" -a -e "$tmp/flutter2.jpg" ]; then
+		diff=$(compare -metric NCC "$tmp/flutter1.jpg" "$tmp/flutter2.jpg" null: 2>&1)
 		if ! echo "$diff" | grep compare >/dev/null; then
 		    difftimes=$(($difftimes + 1))
-		    echo "Diff '$diff'" >> /var/tmp/flutter/diffs
-		    echo "Difftimes '$difftimes'" >> /var/tmp/flutter/diffs
+		    echo "Diff '$diff'" >> $tmp/diffs
+		    echo "Difftimes '$difftimes'" >> $tmp/diffs
 		    totaldiff=$(echo $totaldiff $diff + p | dc)
-		    echo "totaldiff '$totaldiff'" >> /var/tmp/flutter/diffs
+		    echo "totaldiff '$totaldiff'" >> $tmp/diffs
 		fi
 	    fi
 
 	    if [ $(($times % 2)) -eq 0 ]; then
-		rm -f /var/tmp/flutter/flutter1.jpg
-		socat - "$socket" >/dev/null <<< '{ "command": ["screenshot-to-file", "/var/tmp/flutter/flutter1.jpg"] }'
+		rm -f $tmp/flutter1.jpg
+		socat - "$socket" >/dev/null <<< "{ \"command\": [\"screenshot-to-file\", \"$tmp/flutter1.jpg\"] }"
 	    else
-		rm -f /var/tmp/flutter/flutter2.jpg
-		socat - "$socket" >/dev/null <<< '{ "command": ["screenshot-to-file", "/var/tmp/flutter/flutter2.jpg"] }'
+		rm -f $tmp/flutter2.jpg
+		socat - "$socket" >/dev/null <<< "{ \"command\": [\"screenshot-to-file\", \"$tmp/flutter2.jpg\"] }"
 	    fi
 	fi
 
