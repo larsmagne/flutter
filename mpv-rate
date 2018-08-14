@@ -23,16 +23,24 @@ function clean {
 	rm "$socket"
     fi
     
-    if [ -e "/var/tmp/flutter/flutter1.png" ]; then
-	rm "/var/tmp/flutter/flutter1.png"
+    if [ -e "/var/tmp/flutter/flutter1.jpg" ]; then
+	rm "/var/tmp/flutter/flutter1.jpg"
     fi
     
-    if [ -e "/var/tmp/flutter/flutter2.png" ]; then
-	rm "/var/tmp/flutter/flutter2.png"
+    if [ -e "/var/tmp/flutter/flutter2.jpg" ]; then
+	rm "/var/tmp/flutter/flutter2.jpg"
     fi
 }
 
+function cleankill {
+    kill $mpv
+    clean
+    results
+    exit
+}
+
 trap clean EXIT
+trap cleankill SIGINT SIGTERM
 
 function results {
     if [ $times -gt 0 ]; then
@@ -68,8 +76,8 @@ while ps -p $mpv >/dev/null; do
 	times=$(($times + 1))
 
 	if [ $times -lt 20 ]; then
-	    if [ -e "/var/tmp/flutter/flutter1.png" -a -e "/var/tmp/flutter/flutter2.png" ]; then
-		diff=$(compare -metric NCC "/var/tmp/flutter/flutter1.png" "/var/tmp/flutter/flutter2.png" null: 2>&1)
+	    if [ -e "/var/tmp/flutter/flutter1.jpg" -a -e "/var/tmp/flutter/flutter2.jpg" ]; then
+		diff=$(compare -metric NCC "/var/tmp/flutter/flutter1.jpg" "/var/tmp/flutter/flutter2.jpg" null: 2>&1)
 		if ! echo "$diff" | grep compare >/dev/null; then
 		    difftimes=$(($difftimes + 1))
 		    echo "Diff '$diff'" >> /var/tmp/flutter/diffs
@@ -80,11 +88,11 @@ while ps -p $mpv >/dev/null; do
 	    fi
 
 	    if [ $(($times % 2)) -eq 0 ]; then
-		rm -f /var/tmp/flutter/flutter1.png
-		socat - "$socket" >/dev/null <<< '{ "command": ["screenshot-to-file", "/var/tmp/flutter/flutter1.png"] }'
+		rm -f /var/tmp/flutter/flutter1.jpg
+		socat - "$socket" >/dev/null <<< '{ "command": ["screenshot-to-file", "/var/tmp/flutter/flutter1.jpg"] }'
 	    else
-		rm -f /var/tmp/flutter/flutter2.png
-		socat - "$socket" >/dev/null <<< '{ "command": ["screenshot-to-file", "/var/tmp/flutter/flutter2.png"] }'
+		rm -f /var/tmp/flutter/flutter2.jpg
+		socat - "$socket" >/dev/null <<< '{ "command": ["screenshot-to-file", "/var/tmp/flutter/flutter2.jpg"] }'
 	    fi
 	fi
 
@@ -93,7 +101,6 @@ while ps -p $mpv >/dev/null; do
 		if [ $(($total / $times)) -lt "$cutoff" ]; then
 		    clean
 		    results
-		    kill -9 $mpv
 		    exit
 		fi
 	    else
