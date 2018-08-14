@@ -83,9 +83,7 @@ while ps -p $mpv >/dev/null; do
 		if ! echo "$diff" | grep compare >/dev/null; then
 		    difftimes=$(($difftimes + 1))
 		    echo "Diff '$diff'" >> $tmp/diffs
-		    echo "Difftimes '$difftimes'" >> $tmp/diffs
 		    totaldiff=$(echo $totaldiff $diff + p | dc)
-		    echo "totaldiff '$totaldiff'" >> $tmp/diffs
 		fi
 	    fi
 
