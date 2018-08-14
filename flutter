@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
 $update_file = $ARGV[0];
-$no_cut_static = $ARGV[1];
+$no_cut_static = $ARGV[2];
 
 use Digest::SHA;
 use URI::Escape;
@@ -156,7 +156,7 @@ sub play_url {
     my $pid;
 
     $SIG{INT} = sub {
-	print "Player $pid killing\n";
+	#print "Player $pid killing\n";
 	#system("pkill", "-P", $pid, "--signal", "INT");
 	exit(0);
     };
@@ -167,11 +167,17 @@ sub play_url {
 		     "diff", $diff_cutoff);
 	sleep(1);
 	# Kill all other players that may be running behind this one.
-	open(PS, "pgrep mpv-rate |");
+	open(PS, "pgrep -f build/mpv |");
 	while (<PS>) {
 	    chop;
 	    #system("pkill", "-P", $_) if ($_ ne $pid);
-	    kill INT, $_ if ($_ ne $pid);
+	    my $parent = `ps -o ppid= $_`;
+	    $parent =~ s/[^0-9]//g;
+	    #print "pid $pid parent $parent _ $_\n";
+	    if ($parent ne $pid) {
+		#print "$$ Killing $_\n";
+		kill INT, $_;
+	    }
 	}
 	close PS;
 	waitpid($pid, 0);
@@ -238,6 +244,9 @@ sub refresh {
 	    if ($mplayer_pid) {
 		return;
 	    } else {
+		if ($old_pid) {
+		    kill INT, $old_pid;
+		}
 		play_url($url, $video_id);
 	    }
 	}
@@ -262,7 +271,6 @@ while (true) {
 	# Do a refresh every hour, because Youtube stops responding to
 	# the same URL after a while.
 	time - (60 * 60) > $last_play) {
-	$mplayer_pid = 0;
 	$last_play = time;
 	refresh();
     }
