@@ -156,8 +156,6 @@ sub play_url {
     my $pid;
 
     $SIG{INT} = sub {
-	#print "Player $pid killing\n";
-	#system("pkill", "-P", $pid, "--signal", "INT");
 	exit(0);
     };
     
@@ -170,12 +168,9 @@ sub play_url {
 	open(PS, "pgrep -f build/mpv |");
 	while (<PS>) {
 	    chop;
-	    #system("pkill", "-P", $_) if ($_ ne $pid);
 	    my $parent = `ps -o ppid= $_`;
 	    $parent =~ s/[^0-9]//g;
-	    #print "pid $pid parent $parent _ $_\n";
 	    if ($parent ne $pid) {
-		#print "$$ Killing $_\n";
 		kill INT, $_;
 	    }
 	}
