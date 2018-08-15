@@ -103,7 +103,8 @@ sub get_video_id {
 	my $title = $item->{"snippet"}->{"title"};
 	my $id = $item->{"id"};
 	my $duration = $item->{"contentDetails"}->{"duration"};
-	my $diff = $db->selectrow_array("SELECT diff FROM videos WHERE id = '$id'");
+	my $diff = $db->selectrow_array("SELECT diff FROM videos WHERE id = ?",
+					undef, $id);
 	print "Video $title ($diff)\n";
 	if ($diff eq "" || $diff < $diff_cutoff) {
 	    # Durations are on the format "PT3M59S".
@@ -185,9 +186,11 @@ sub play_url {
 	if ($diff eq "") {
 	    $diff = 1;
 	}
-	my $old = $db->selectrow_array("SELECT id FROM videos WHERE id = '$id'");
+	my $old = $db->selectrow_array("SELECT id FROM videos WHERE id = ?",
+				       undef, $id);
 	if (! $old) {
-	    $db->do("insert into videos values ('$id', '$rate', '$diff')");
+	    $db->do("insert into videos values (?, ?, ?)", undef,
+		    $id, $rate, $diff);
 	}
 	print "Rates $rate $diff\n";
 	sleep(2);
