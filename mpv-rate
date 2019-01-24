@@ -18,6 +18,10 @@ fi
 
 tmp="/var/tmp/flutter"
 
+if [ ! -d "$tmp" ]; then
+   mkdir "$tmp"
+fi
+
 socket="$tmp/mpv-$$"
 
 function clean {
