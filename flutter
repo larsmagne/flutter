@@ -19,7 +19,7 @@ if (! -d "/home/larsi/.config/flutter") {
 if ($no_cut_static) {
     $diff_cutoff = 1;
 } else {
-    $diff_cutoff = 0.95;
+    $diff_cutoff = 0.85;
 }
 
 my $db = DBI->connect('dbi:SQLite:dbname=/home/larsi/.config/flutter/flutter.sqlite','','',{AutoCommit=>1,RaiseError=>1,PrintError=>0});
@@ -105,7 +105,7 @@ sub get_video_id {
 	my $duration = $item->{"contentDetails"}->{"duration"};
 	my $diff = $db->selectrow_array("SELECT diff FROM videos WHERE id = ?",
 					undef, $id);
-	print "Video $title ($diff)\n";
+	#print "Video $title ($diff)\n";
 	if ($diff eq "" || $diff < $diff_cutoff) {
 	    # Durations are on the format "PT3M59S".
 	    if ($duration =~ /PT([0-9]+)M([0-9]+)S/) {
@@ -123,7 +123,7 @@ sub get_video_id {
     # Sort the results so that we choose the video that has the length
     # that's least close to our target song, except really big
     # differences.
-    @entries = sort { video_predicate($length, $a, $b) } @entries;
+    #@entries = sort { video_predicate($length, $a, $b) } @entries;
 
     my $best_entry = $entries[0];
     print "Best length is " . video_duration($best_entry) . "\n";
@@ -232,7 +232,7 @@ sub refresh {
 	$string = uri_escape(join ' ', @bits[0..$#bits-1]);
 	sleep(5);
     }
-    
+
     if ($video_id) {
 	my $url = `youtube-dl -g 'http://www.youtube.com/watch?v=$video_id&feature=related' 2>/dev/null | head -n 1`;
 	if ($url) {
@@ -245,6 +245,7 @@ sub refresh {
 		if ($old_pid) {
 		    kill INT, $old_pid;
 		}
+		print "Playing $video_id\n";
 		play_url($url, $video_id);
 	    }
 	}
