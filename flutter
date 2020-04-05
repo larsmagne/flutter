@@ -230,10 +230,16 @@ sub refresh {
 	last if ($string eq "");
 	my @bits = split(/ /, uri_unescape($string));
 	$string = uri_escape(join ' ', @bits[0..$#bits-1]);
-	sleep(5);
     }
 
     if ($video_id) {
+	# Don't query Youtube so often.
+	while (time - (5 * 60) < $last_query) {
+	    print "Sleeping...\n";
+	    sleep(1);
+	}
+	$last_query = time;
+	print "youtube-dl -g 'http://www.youtube.com/watch?v=$video_id&feature=related'\n";
 	my $url = `youtube-dl -g 'http://www.youtube.com/watch?v=$video_id&feature=related' 2>/dev/null | head -n 1`;
 	if ($url) {
 	    chop($url);
@@ -253,6 +259,7 @@ sub refresh {
 }
 
 $last_play = time;
+$last_query = time - 30 * 60;
 
 open(API, "$ENV{HOME}/.youtube_api_key") || die $!;
 $api_key = <API>;
