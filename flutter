@@ -51,11 +51,27 @@ sub video_predicate {
 
 sub rate_limit {
     # Don't query Youtube so often.
-    while (time - 60 < $last_query) {
+    if (! $last_query) {
+	$last_query = time;
+    }
+    while (time - 15 < $last_query) {
 	print "Sleeping...\n";
 	sleep(1);
     }
     $last_query = time;
+}
+
+sub query {
+    my $url = shift;
+    if ($cache{$url}) {
+	return $cache{$url};
+    }
+    rate_limit();
+    system("curl", "-s", "-o", "/tmp/flutter.url", $url);
+    my $file = file('/tmp/flutter.url');
+    my $text = $file->slurp();
+    $cache{$url} = $text;
+    return $text;
 }
 
 # Given a search term, return the URL.
@@ -65,15 +81,8 @@ sub get_video_id {
     print "Searching for $search ($length)\n";
     my @entries = ();
 
-    rate_limit();
     # First find all the matching video IDs.
-    system("curl",
-	   "-s",
-	   "-o", "/tmp/flutter.url",
-	   "https://www.googleapis.com/youtube/v3/search?part=snippet&order=viewCount&q=$search&type=video&maxResults=10&key=$api_key");
-
-    my $file = file('/tmp/flutter.url');
-    $text = $file->slurp();
+    my $text = query("https://www.googleapis.com/youtube/v3/search?part=snippet&order=viewCount&q=$search&type=video&maxResults=10&key=$api_key");
 
     my $json = decode_json $text;
     if (! $json) {
@@ -93,14 +102,7 @@ sub get_video_id {
     }
 
     # Then query again to get the duration of all these IDs.
-    rate_limit();
-    system("curl",
-	   "-s",
-	   "-o", "/tmp/flutter.url",
-	   "https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=$ids&maxResults=30&key=$api_key");
-
-    my $file = file('/tmp/flutter.url');
-    $text = $file->slurp();
+    my $text = query("https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=$ids&maxResults=30&key=$api_key");
 
     my $json = decode_json $text;
     if (! $json) {
@@ -264,7 +266,6 @@ sub refresh {
 }
 
 $last_play = time;
-$last_query = time - 30 * 60;
 
 open(API, "$ENV{HOME}/.youtube_api_key") || die $!;
 $api_key = <API>;
