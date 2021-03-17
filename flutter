@@ -12,6 +12,7 @@ use Path::Class;
 use Data::Dumper;
 use IPC::Open2;
 use DBI;
+use List::MoreUtils qw(uniq);
 
 if (! -d "/home/larsi/.config/flutter") {
     mkdir "/home/larsi/.config/flutter";
@@ -86,40 +87,46 @@ sub query {
     return $text;
 }
 
+sub search_youtube {
+    my $search = shift;
+    if ($cache{$search}) {
+	return $cache{$search};
+    }
+    api_rate_limit(15);
+    system("curl", "-s", "-o", "/tmp/flutter.search",
+	   "https://www.youtube.com/results?search_query=$search");
+    my $file = file('/tmp/flutter.search');
+    my $text = $file->slurp();
+    my @arr = ($text =~ /videoId":"([^"]+)/g);
+    my @arr = uniq @arr;
+    foreach (@arr) {
+	if ($ids eq "") {
+	    $ids = $_;
+	} else {
+	    $ids .= "," . $_;
+	}
+    }
+    $cache{$search} = $ids;
+    return $ids;
+}
+
 # Given a search term, return the URL.
 sub get_video_id {
     my $search = shift;
     my $length = shift;
     print "Searching for $search ($length)\n";
     my @entries = ();
-
-    # First find all the matching video IDs.
-    my $text = query("https://www.googleapis.com/youtube/v3/search?part=snippet&order=viewCount&q=$search&type=video&maxResults=10&key=$api_key", 900);
-
-    my $json = decode_json $text;
-    if (! $json) {
-	print "Unable to parse JSON\n";
-	return;
-    }
-
     my $ids = "";
-    $items = $json->{"items"};
-    foreach my $item (@$items) { 
-	my $id = $item->{"id"}->{"videoId"};
-	if (! $ids) {
-	    $ids = $id;
-	} else {
-	    $ids .= ",$id";
-	}
-    }
-
+    
+    # First find all the matching video IDs.
+    $ids = search_youtube($search);
     if ($ids eq "") {
 	print "No results\n";
 	return;
     }
 
     # Then query again to get the duration of all these IDs.
-    my $text = query("https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=$ids&maxResults=30&key=$api_key", 1);
+    my $text = query("https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=$ids&maxResults=30&key=$api_key", 15);
     
     my $json = decode_json $text;
     if (! $json) {
