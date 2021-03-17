@@ -6,6 +6,7 @@ $no_cut_static = $ARGV[2];
 use Digest::SHA;
 use URI::Escape;
 use POSIX qw(:sys_wait_h);
+use POSIX qw/strftime/;
 use JSON;
 use Path::Class;
 use Data::Dumper;
@@ -49,24 +50,35 @@ sub video_predicate {
     }
 }
 
-sub rate_limit {
+sub api_rate_limit {
+    my $rate = shift;
     # Don't query Youtube so often.
-    if (! $last_query) {
-	$last_query = time;
-    }
-    while (time - 15 < $last_query) {
+    while (time - $rate < $last_api_query) {
 	print "Sleeping...\n";
 	sleep(1);
     }
-    $last_query = time;
+    $last_api_query = time;
+}
+
+sub tube_rate_limit {
+    # Don't query Youtube so often.
+    while (time - 15 < $last_tube_query) {
+	print "Sleeping...\n";
+	sleep(1);
+    }
+    $last_tube_query = time;
 }
 
 sub query {
     my $url = shift;
+    my $rate = shift;
     if ($cache{$url}) {
 	return $cache{$url};
     }
-    rate_limit();
+    api_rate_limit($rate);
+    open(LOG, ">>/tmp/flutter.log");
+    print LOG strftime('%Y-%m-%dT%H:%M:%S', localtime(time)), " ", $url, "\n";
+    close LOG;
     system("curl", "-s", "-o", "/tmp/flutter.url", $url);
     my $file = file('/tmp/flutter.url');
     my $text = $file->slurp();
@@ -82,7 +94,7 @@ sub get_video_id {
     my @entries = ();
 
     # First find all the matching video IDs.
-    my $text = query("https://www.googleapis.com/youtube/v3/search?part=snippet&order=viewCount&q=$search&type=video&maxResults=10&key=$api_key");
+    my $text = query("https://www.googleapis.com/youtube/v3/search?part=snippet&order=viewCount&q=$search&type=video&maxResults=10&key=$api_key", 900);
 
     my $json = decode_json $text;
     if (! $json) {
@@ -90,7 +102,7 @@ sub get_video_id {
 	return;
     }
 
-    my $ids;
+    my $ids = "";
     $items = $json->{"items"};
     foreach my $item (@$items) { 
 	my $id = $item->{"id"}->{"videoId"};
@@ -101,9 +113,14 @@ sub get_video_id {
 	}
     }
 
-    # Then query again to get the duration of all these IDs.
-    my $text = query("https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=$ids&maxResults=30&key=$api_key");
+    if ($ids eq "") {
+	print "No results\n";
+	return;
+    }
 
+    # Then query again to get the duration of all these IDs.
+    my $text = query("https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=$ids&maxResults=30&key=$api_key", 1);
+    
     my $json = decode_json $text;
     if (! $json) {
 	print "Unable to parse JSON\n";
@@ -233,7 +250,7 @@ sub refresh {
 
     my $length = duration($current);
     my $video_id;
-    my $string = "$artist+$track";
+    my $string = "$artist%20$track";
     # If we can't find a match, keep chopping off words until we can.
     while (true) {
 	eval {
@@ -246,6 +263,7 @@ sub refresh {
     }
 
     if ($video_id) {
+	tube_rate_limit();
 	print "youtube-dl -g 'http://www.youtube.com/watch?v=$video_id&feature=related'\n";
 	my $url = `youtube-dl -g 'http://www.youtube.com/watch?v=$video_id&feature=related' 2>/dev/null | head -n 1`;
 	if ($url) {
