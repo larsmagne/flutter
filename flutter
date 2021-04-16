@@ -99,12 +99,15 @@ sub search_youtube {
     my $text = $file->slurp();
     my @arr = ($text =~ /videoId":"([^"]+)/g);
     my @arr = uniq @arr;
+    my $times = 9;
+    my $ids = "";
     foreach (@arr) {
 	if ($ids eq "") {
 	    $ids = $_;
 	} else {
 	    $ids .= "," . $_;
 	}
+	break if (--$times == 0);
     }
     $cache{$search} = $ids;
     return $ids;
@@ -116,10 +119,9 @@ sub get_video_id {
     my $length = shift;
     print "Searching for $search ($length)\n";
     my @entries = ();
-    my $ids = "";
     
     # First find all the matching video IDs.
-    $ids = search_youtube($search);
+    my $ids = search_youtube($search);
     if ($ids eq "") {
 	print "No results\n";
 	return;
