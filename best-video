@@ -1,0 +1,18 @@
+#!/usr/bin/perl
+
+my $video_id = $ARGV[0];
+
+my $best;
+open(TUBE, "~/bin/youtube-dl -F 'http://www.youtube.com/watch?v=$video_id&feature=related' 2>/dev/null |");
+while (<TUBE>) {
+    my @elems = split;
+    my $res = $elems[2];
+    next unless $res =~ /[0-9]x[0-9]/;
+    my @dim = split(/x/, $res);
+    next if $dim[0] >= 1280;
+    next if $dim[1] >= 720;
+    $best = $elems[0];
+}
+
+my $url = `~/bin/youtube-dl -f $best -g 'http://www.youtube.com/watch?v=$video_id&feature=related' 2>/dev/null | head -n 1`;
+print "$url";
