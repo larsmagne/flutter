@@ -3,6 +3,8 @@
 $update_file = $ARGV[0];
 $no_cut_static = $ARGV[2];
 
+# apt install libdbd-sqlite3-perl libdbi-perl libpath-class-perl libjson-perl liburi-perl socat jq liblist-moreutils-perl dc
+
 use Digest::SHA;
 use URI::Escape;
 use POSIX qw(:sys_wait_h);
@@ -54,18 +56,18 @@ sub video_predicate {
 sub api_rate_limit {
     my $rate = shift;
     # Don't query Youtube so often.
-    while (time - $rate < $last_api_query) {
-	print "Sleeping...\n";
-	sleep(1);
-    }
+    # while (time - $rate < $last_api_query) {
+    # 	print "Sleeping...\n";
+    # 	sleep(1);
+    # }
     $last_api_query = time;
 }
 
 sub tube_rate_limit {
     # Don't query Youtube so often.
     while (time - 15 < $last_tube_query) {
-	print "Sleeping...\n";
-	sleep(1);
+    	print "Sleeping...\n";
+    	sleep(1);
     }
     $last_tube_query = time;
 }
@@ -92,7 +94,7 @@ sub search_youtube {
     if ($cache{$search}) {
 	return $cache{$search};
     }
-    api_rate_limit(15);
+    api_rate_limit(1);
     system("curl", "-s", "-o", "/tmp/flutter.search",
 	   "https://www.youtube.com/results?search_query=$search");
     my $file = file('/tmp/flutter.search');
@@ -201,7 +203,9 @@ sub play_url {
     
     while (true) {
 	$pid = open2(\*CHLD_OUT, \*CHLD_IN,
-		     "/home/larsi/src/flutter/mpv-rate", $url,
+		     "/home/larsi/src/flutter/mpv-rate",
+		     #"https://www.youtube.com/watch?v=$id",
+		     $url,
 		     "diff", $diff_cutoff);
 	sleep(1);
 	# Kill all other players that may be running behind this one.
@@ -218,6 +222,7 @@ sub play_url {
 	waitpid($pid, 0);
 	$rates = <CHLD_OUT>;
 	chop $rates;
+	print "R $rates\n";
 	($rate, $diff) = split / /, $rates;
 	if ($rate eq "") {
 	    $rate = 0;
@@ -245,8 +250,9 @@ sub refresh {
     my $current = <UF>;
     close UF;
 
-    chop($current);
     my @current = split("/", $current);
+
+    print "Here $current\n";
 
     return if ($#current) < 2;
     
@@ -274,7 +280,7 @@ sub refresh {
     if ($video_id) {
 	tube_rate_limit();
 	print "youtube-dl -g 'http://www.youtube.com/watch?v=$video_id&feature=related'\n";
-	my $url = `youtube-dl -g 'http://www.youtube.com/watch?v=$video_id&feature=related' 2>/dev/null | head -n 1`;
+	my $url = `/home/larsi/src/flutter/best-video '$video_id'`;
 	if ($url) {
 	    chop($url);
 	    my $old_pid = $mplayer_pid;

@@ -66,7 +66,9 @@ function results {
 
 clean
 
-DISPLAY=:1 /usr/src/mpv/build/mpv --no-stop-screensaver -vo=x11 --no-audio --quiet --input-ipc-server="$socket" --fullscreen "$url" >/dev/null 2>/dev/null &
+#PATH=$PATH:/home/larsi/.local/bin /usr/src/mpv/build/mpv --no-stop-screensaver -vo=x11 --no-audio --quiet --input-ipc-server="$socket" "$url" 2>/dev/null >/dev/null &
+
+~/src/mpv/build/mpv --no-stop-screensaver --no-audio --quiet --fs --input-ipc-server="$socket" "$url" 2>/dev/null >/dev/null &
 
 mpv="$!"
 
@@ -75,6 +77,7 @@ difftimes=0
 totaldiff=0
 while ps -p $mpv >/dev/null; do
     data=$(echo '{ "command": ["get_property", "video-bitrate"] }' | socat - "$socket")
+    echo "Data $data\n" >> /tmp/data
     state=$(jq -r .error <<< "$data")
     if [ "$state" = "success" ]; then
 	rate=$(jq -r .data <<< "$data")
