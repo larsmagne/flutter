@@ -56,10 +56,10 @@ sub video_predicate {
 sub api_rate_limit {
     my $rate = shift;
     # Don't query Youtube so often.
-    # while (time - $rate < $last_api_query) {
-    # 	print "Sleeping...\n";
-    # 	sleep(1);
-    # }
+    while (time - $rate < $last_api_query) {
+    	print "Sleeping...\n";
+    	sleep(1);
+    }
     $last_api_query = time;
 }
 
@@ -130,7 +130,7 @@ sub get_video_id {
     }
 
     # Then query again to get the duration of all these IDs.
-    my $text = query("https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=$ids&maxResults=30&key=$api_key", 15);
+    my $text = query("https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=$ids&maxResults=30&key=$api_key", 1);
     
     my $json = decode_json $text;
     if (! $json) {
