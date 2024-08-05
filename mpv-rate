@@ -68,7 +68,7 @@ clean
 
 #PATH=$PATH:/home/larsi/.local/bin /usr/src/mpv/build/mpv --no-stop-screensaver -vo=x11 --no-audio --quiet --input-ipc-server="$socket" "$url" 2>/dev/null >/dev/null &
 
-~/src/mpv/build/mpv --no-stop-screensaver --no-audio --quiet --fs --input-ipc-server="$socket" "$url" 2>/dev/null >/dev/null &
+~/src/mpv/build/mpv --panscan=1.0 --no-stop-screensaver --no-audio --quiet --fs --no-osc --input-ipc-server="$socket" "$url" 2>/dev/null >/dev/null &
 
 mpv="$!"
 
