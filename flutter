@@ -202,6 +202,15 @@ sub play_url {
     };
     
     while (true) {
+	do {
+	    $powersave = `busctl --user get-property org.gnome.Mutter.DisplayConfig /org/gnome/Mutter/DisplayConfig org.gnome.Mutter.DisplayConfig PowerSaveMode`;
+	    chomp($powersave);
+	    print "Power: '$powersave'\n";
+	    if ($powersave eq "i 1") {
+		sleep(1);
+	    }
+	} while ($powersave eq "i 1");
+	    
 	$pid = open2(\*CHLD_OUT, \*CHLD_IN,
 		     "/home/larsi/src/flutter/mpv-rate",
 		     #"https://www.youtube.com/watch?v=$id",
