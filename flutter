@@ -57,7 +57,7 @@ sub api_rate_limit {
     my $rate = shift;
     # Don't query Youtube so often.
     while (time - $rate < $last_api_query) {
-    	print "Sleeping...\n";
+    	print "Sleeping for api...\n";
     	sleep(1);
     }
     $last_api_query = time;
@@ -65,8 +65,8 @@ sub api_rate_limit {
 
 sub tube_rate_limit {
     # Don't query Youtube so often.
-    while (time - 15 < $last_tube_query) {
-    	print "Sleeping...\n";
+    while (time - 60 < $last_tube_query) {
+    	print "Sleeping for tube...\n";
     	sleep(1);
     }
     $last_tube_query = time;
@@ -94,7 +94,7 @@ sub search_youtube {
     if ($cache{$search}) {
 	return $cache{$search};
     }
-    api_rate_limit(1);
+    api_rate_limit(60);
     system("curl", "-s", "-o", "/tmp/flutter.search",
 	   "https://www.youtube.com/results?search_query=$search");
     my $file = file('/tmp/flutter.search');
