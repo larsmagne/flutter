@@ -5,7 +5,7 @@ $no_cut_static = $ARGV[2];
 
 # apt install libdbd-sqlite3-perl libdbi-perl libpath-class-perl libjson-perl liburi-perl socat jq liblist-moreutils-perl dc
 
-$api_rate = 10;
+$api_rate = 60;
 
 use Digest::SHA;
 use URI::Escape;
