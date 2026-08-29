@@ -16,7 +16,7 @@ if [ "$url" = "" ]; then
     exit
 fi
 
-tmp="/var/tmp/flutter"
+tmp="/tmp/flutter"
 
 if [ ! -d "$tmp" ]; then
    mkdir "$tmp"
@@ -28,7 +28,7 @@ function clean {
     if [ -e "$socket" ]; then
 	rm "$socket"
     fi
-    
+
     if [ -e "$tmp/flutter1.jpg" ]; then
 	rm "$tmp/flutter1.jpg"
     fi
@@ -68,7 +68,9 @@ clean
 
 #PATH=$PATH:/home/larsi/.local/bin /usr/src/mpv/build/mpv --no-stop-screensaver -vo=x11 --no-audio --quiet --input-ipc-server="$socket" "$url" 2>/dev/null >/dev/null &
 
-~/src/mpv/build/mpv --panscan=1.0 --no-stop-screensaver --no-audio --quiet --fs --no-osc --input-ipc-server="$socket" "$url" 2>/dev/null >/dev/null &
+#  
+
+~/src/mpv/build/mpv --msg-level=all=info --hwdec=no --vd=lavc:libaom-av1 --panscan=1.0 --no-stop-screensaver --no-audio --fs --no-osc --input-ipc-server="$socket" "$url" 2>>/tmp/mpv.log >>/tmp/mpv.log &
 
 mpv="$!"
 
@@ -117,8 +119,24 @@ while ps -p $mpv >/dev/null; do
 		    if [ $diff -gt $cut ]; then
 			clean
 			results
-			#kill -9 $mpv
+			# We have a too silent video, so kill it.
+			kill -9 $mpv
 			exit
+		    else
+			# We have a successful video, so kill all
+			# other mpvs that may be running in the
+			# background.
+			for opid in `pgrep -f build/mpv`; do
+			    if [ "$opid" -ne "$mpv" ]; then
+				echo "Killing $opid and its parents because it's not $mpv" >> /tmp/kill.log
+				parent=`ps -o ppid= $opid`
+				pparent=`ps -o ppid= $parent`
+				echo "Killing $pparent $parent $opid" >> /tmp/kill.log
+				kill $pparent $parent $opid
+			    fi
+			done
+			# Don't kill any new videos, though.
+			cutoff=""
 		    fi
 		fi
 	    fi

@@ -5,6 +5,8 @@ $no_cut_static = $ARGV[2];
 
 # apt install libdbd-sqlite3-perl libdbi-perl libpath-class-perl libjson-perl liburi-perl socat jq liblist-moreutils-perl dc
 
+$api_rate = 10;
+
 use Digest::SHA;
 use URI::Escape;
 use POSIX qw(:sys_wait_h);
@@ -53,19 +55,22 @@ sub video_predicate {
     }
 }
 
+$last_api_query = 0;
 sub api_rate_limit {
     my $rate = shift;
+    print "Checking API rate\n";
     # Don't query Youtube so often.
-    while (time - $rate < $last_api_query) {
+    while ($last_api_query && time - $rate < $last_api_query) {
     	print "Sleeping for api...\n";
     	sleep(1);
     }
     $last_api_query = time;
 }
 
+$last_tube_query;
 sub tube_rate_limit {
     # Don't query Youtube so often.
-    while (time - 60 < $last_tube_query) {
+    while ($last_tube_query && time - $api_rate < $last_tube_query) {
     	print "Sleeping for tube...\n";
     	sleep(1);
     }
@@ -75,7 +80,9 @@ sub tube_rate_limit {
 sub query {
     my $url = shift;
     my $rate = shift;
+    print "Querying $url with rate $rate\n";
     if ($cache{$url}) {
+	print "Got cache\n";
 	return $cache{$url};
     }
     api_rate_limit($rate);
@@ -94,7 +101,6 @@ sub search_youtube {
     if ($cache{$search}) {
 	return $cache{$search};
     }
-    api_rate_limit(60);
     system("curl", "-s", "-o", "/tmp/flutter.search",
 	   "https://www.youtube.com/results?search_query=$search");
     my $file = file('/tmp/flutter.search');
@@ -130,7 +136,7 @@ sub get_video_id {
     }
 
     # Then query again to get the duration of all these IDs.
-    my $text = query("https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=$ids&maxResults=30&key=$api_key", 1);
+    my $text = query("https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=$ids&maxResults=30&key=$api_key", $api_rate);
     
     my $json = decode_json $text;
     if (! $json) {
@@ -202,6 +208,7 @@ sub play_url {
     };
     
     while (true) {
+	# Don't play anything if we're on power save.
 	do {
 	    $powersave = `busctl --user get-property org.gnome.Mutter.DisplayConfig /org/gnome/Mutter/DisplayConfig org.gnome.Mutter.DisplayConfig PowerSaveMode`;
 	    chomp($powersave);
@@ -210,24 +217,14 @@ sub play_url {
 		sleep(1);
 	    }
 	} while ($powersave eq "i 1");
-	    
+
+	tube_rate_limit();
 	$pid = open2(\*CHLD_OUT, \*CHLD_IN,
 		     "/home/larsi/src/flutter/mpv-rate",
 		     #"https://www.youtube.com/watch?v=$id",
 		     $url,
 		     "diff", $diff_cutoff);
 	sleep(1);
-	# Kill all other players that may be running behind this one.
-	open(PS, "pgrep -f build/mpv |");
-	while (<PS>) {
-	    chop;
-	    my $parent = `ps -o ppid= $_`;
-	    $parent =~ s/[^0-9]//g;
-	    if ($parent ne $pid) {
-		kill INT, $_;
-	    }
-	}
-	close PS;
 	waitpid($pid, 0);
 	$rates = <CHLD_OUT>;
 	chop $rates;
@@ -248,6 +245,7 @@ sub play_url {
 	print "Rates $rate $diff\n";
 	sleep(2);
 	if ($diff > $diff_cutoff) {
+	    print "Exiting because of too little action\n";
 	    exit(0);
 	}
     }
@@ -287,8 +285,7 @@ sub refresh {
     }
 
     if ($video_id) {
-	tube_rate_limit();
-	print "youtube-dl -g 'http://www.youtube.com/watch?v=$video_id&feature=related'\n";
+	print "youtube-dl -g 'https://www.youtube.com/watch?v=$video_id&feature=related'\n";
 	my $url = `/home/larsi/src/flutter/best-video '$video_id'`;
 	if ($url) {
 	    chop($url);
@@ -298,7 +295,7 @@ sub refresh {
 		return;
 	    } else {
 		if ($old_pid) {
-		    kill INT, $old_pid;
+		    #kill INT, $old_pid;
 		}
 		print "Playing $video_id\n";
 		play_url($url, $video_id);
