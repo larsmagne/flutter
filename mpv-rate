@@ -16,7 +16,7 @@ if [ "$url" = "" ]; then
     exit
 fi
 
-tmp="/tmp/flutter"
+tmp="/ramdisk/flutter"
 
 if [ ! -d "$tmp" ]; then
    mkdir "$tmp"
@@ -70,7 +70,7 @@ clean
 
 #  
 
-~/src/mpv/build/mpv --msg-level=all=info --hwdec=no --vd=lavc:libaom-av1 --panscan=1.0 --no-stop-screensaver --no-audio --fs --no-osc --input-ipc-server="$socket" "$url" 2>>/tmp/mpv.log >>/tmp/mpv.log &
+~/src/mpv/build/mpv --msg-level=all=info --hwdec=no --vd=lavc:libaom-av1 --panscan=1.0 --no-stop-screensaver --no-audio --fs --no-osc --input-ipc-server="$socket" "$url" 2>>/ramdisk/mpv.log >>/ramdisk/mpv.log &
 
 mpv="$!"
 
@@ -79,7 +79,7 @@ difftimes=0
 totaldiff=0
 while ps -p $mpv >/dev/null; do
     data=$(echo '{ "command": ["get_property", "video-bitrate"] }' | socat - "$socket")
-    echo "Data $data\n" >> /tmp/data
+    echo "Data $data\n" >> /ramdisk/data
     state=$(jq -r .error <<< "$data")
     if [ "$state" = "success" ]; then
 	rate=$(jq -r .data <<< "$data")
@@ -128,10 +128,10 @@ while ps -p $mpv >/dev/null; do
 			# background.
 			for opid in `pgrep -f build/mpv`; do
 			    if [ "$opid" -ne "$mpv" ]; then
-				echo "Killing $opid and its parents because it's not $mpv" >> /tmp/kill.log
+				echo "Killing $opid and its parents because it's not $mpv" >> /ramdisk/kill.log
 				parent=`ps -o ppid= $opid`
 				pparent=`ps -o ppid= $parent`
-				echo "Killing $pparent $parent $opid" >> /tmp/kill.log
+				echo "Killing $pparent $parent $opid" >> /ramdisk/kill.log
 				kill $pparent $parent $opid
 			    fi
 			done
